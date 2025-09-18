@@ -8,8 +8,8 @@ import cv2
 import os
 import sys
 
-from lib.yolov3.util import convert2cpu as cpu
-from lib.yolov3.util import predict_transform
+from .util import convert2cpu as cpu
+from .util import predict_transform
 
 
 class test_net(nn.Module):
@@ -348,7 +348,8 @@ class Darknet(nn.Module):
     def load_weights(self, weightfile):
         # Introduction: https://blog.paperspace.com/how-to-implement-a-yolo-v3-object-detector-from-scratch-in-pytorch-part-3/
         # Open the weights file
-        # weightfile = os.path.join(sys.path[-1], weightfile)
+        weightfile = os.path.join(os.getcwd(), "MotionAGFormer", weightfile)
+        print(weightfile)
         fp = open(weightfile, "rb")
 
         # The first 5 values are header information

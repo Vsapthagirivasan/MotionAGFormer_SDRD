@@ -1,8 +1,8 @@
 import sys
 import argparse
 import cv2
-from lib.preprocess import h36m_coco_format, revise_kpts
-from lib.hrnet.gen_kpts import gen_video_kpts as hrnet_pose
+from demo.lib.preprocess import h36m_coco_format, revise_kpts
+from demo.lib.hrnet.gen_kpts import gen_video_kpts as hrnet_pose
 import os 
 import numpy as np
 import torch
@@ -333,5 +333,3 @@ if __name__ == "__main__":
     get_pose3D(video_path, output_dir)
     img2video(video_path, output_dir)
     print('Generating demo successful!')
-
-
