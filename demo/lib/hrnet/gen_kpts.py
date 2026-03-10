@@ -160,6 +160,8 @@ def gen_video_kpts(video, det_dim=416, num_peroson=1, gen_output=False):
     people_sort = Sort(min_hits=0)
 
     video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    bboxs_pre = None 
+    scores_pre = None 
 
     kpts_result = []
     scores_result = []
@@ -175,6 +177,8 @@ def gen_video_kpts(video, det_dim=416, num_peroson=1, gen_output=False):
 
         if bboxs is None or not bboxs.any():
             print("No person detected!")
+            if bboxs_pre is None:
+                continue
             bboxs = bboxs_pre
             scores = scores_pre
         else:
