@@ -147,8 +147,7 @@ def turn_into_clips(keypoints):
             if clip_length != 243:
                 new_indices = resample(clip_length)
                 clips.append(keypoints_clip[:, new_indices, ...])
-                # downsample = np.unique(new_indices, return_index=True)[1]
-                downsample = np.arange(243)
+                downsample = np.unique(new_indices, return_index=True)[1]
             else:
                 clips.append(keypoints_clip)
     return clips, downsample
