@@ -21,34 +21,62 @@ from demo.lib.hrnet.lib.utils.transforms import *
 from demo.lib.hrnet.lib.utils.inference import get_final_preds
 from demo.lib.hrnet.lib.models import pose_hrnet
 
-cfg_dir = os.path.join(os.getcwd(), "MotionAGFormer",'demo/lib/hrnet/experiments/')
-model_dir = os.path.join(os.getcwd(), "MotionAGFormer",'demo/lib/checkpoint/')
+cfg_dir = os.path.join(os.getcwd(), "MotionAGFormer", "demo/lib/hrnet/experiments/")
+model_dir = os.path.join(os.getcwd(), "MotionAGFormer", "demo/lib/checkpoint/")
 
 # Loading human detector model
 from demo.lib.yolov3.human_detector import load_model as yolo_model
 from demo.lib.yolov3.human_detector import yolo_human_det as yolo_det
 from demo.lib.sort.sort import Sort
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train keypoints network')
+    parser = argparse.ArgumentParser(description="Train keypoints network")
     # general
-    parser.add_argument('--cfg', type=str, default=cfg_dir + 'w48_384x288_adam_lr1e-3.yaml',
-                        help='experiment configure file name')
-    parser.add_argument('opts', nargs=argparse.REMAINDER, default=None,
-                        help="Modify config options using the command-line")
-    parser.add_argument('--modelDir', type=str, default=model_dir + 'pose_hrnet_w48_384x288.pth',
-                        help='The model directory')
-    parser.add_argument('--det-dim', type=int, default=416,
-                        help='The input dimension of the detected image')
-    parser.add_argument('--thred-score', type=float, default=0.30,
-                        help='The threshold of object Confidence')
-    parser.add_argument('-a', '--animation', action='store_true',
-                        help='output animation')
-    parser.add_argument('-np', '--num-person', type=int, default=1,
-                        help='The maximum number of estimated poses')
-    parser.add_argument("-v", "--video", type=str, default='camera',
-                        help="input video file name")
-    parser.add_argument('--gpu', type=str, default='0', help='input video')
+    parser.add_argument(
+        "--cfg",
+        type=str,
+        default=cfg_dir + "w48_384x288_adam_lr1e-3.yaml",
+        help="experiment configure file name",
+    )
+    parser.add_argument(
+        "opts",
+        nargs=argparse.REMAINDER,
+        default=None,
+        help="Modify config options using the command-line",
+    )
+    parser.add_argument(
+        "--modelDir",
+        type=str,
+        default=model_dir + "pose_hrnet_w48_384x288.pth",
+        help="The model directory",
+    )
+    parser.add_argument(
+        "--det-dim",
+        type=int,
+        default=416,
+        help="The input dimension of the detected image",
+    )
+    parser.add_argument(
+        "--thred-score",
+        type=float,
+        default=0.30,
+        help="The threshold of object Confidence",
+    )
+    parser.add_argument(
+        "-a", "--animation", action="store_true", help="output animation"
+    )
+    parser.add_argument(
+        "-np",
+        "--num-person",
+        type=int,
+        default=1,
+        help="The maximum number of estimated poses",
+    )
+    parser.add_argument(
+        "-v", "--video", type=str, default="camera", help="input video file name"
+    )
+    parser.add_argument("--gpu", type=str, default="0", help="input video")
     args = parser.parse_args()
 
     return args
@@ -71,6 +99,7 @@ def model_load(config):
 
     state_dict = torch.load(config.OUTPUT_DIR)
     from collections import OrderedDict
+
     new_state_dict = OrderedDict()
     for k, v in state_dict.items():
         name = k  # remove module.
@@ -79,8 +108,43 @@ def model_load(config):
     model.load_state_dict(new_state_dict)
     model.eval()
     # print('HRNet network successfully loaded')
-    
+
     return model
+
+
+def pad_to_landscape(frame, pad_value=0):
+    """
+    Ensures the frame matches a 16:9 landscape aspect ratio by padding width only.
+    Height is preserved, pad equally on both sides.
+
+    Parameters:
+        frame: np.ndarray (H, W, C)
+        pad_value: int or tuple for padding color
+
+    Returns:
+        padded_frame: np.ndarray
+        x_shift: int  # left padding applied
+        y_shift: int  # always 0
+    """
+    h, w, c = frame.shape
+    target_w = int(round(h * 16 / 9))
+
+    # Already wide enough → no padding required
+    if w >= target_w:
+        return frame, 0, 0
+
+    pad_total = target_w - w
+    pad_left = pad_total // 2
+    pad_right = pad_total - pad_left
+
+    padded_frame = np.pad(
+        frame,
+        pad_width=((0, 0), (pad_left, pad_right), (0, 0)),
+        mode="constant",
+        constant_values=pad_value,
+    )
+
+    return padded_frame, pad_left, 0
 
 
 def gen_video_kpts(video, det_dim=416, num_peroson=1, gen_output=False):
@@ -96,6 +160,8 @@ def gen_video_kpts(video, det_dim=416, num_peroson=1, gen_output=False):
     people_sort = Sort(min_hits=0)
 
     video_length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    bboxs_pre = None 
+    scores_pre = None 
 
     kpts_result = []
     scores_result = []
@@ -105,15 +171,19 @@ def gen_video_kpts(video, det_dim=416, num_peroson=1, gen_output=False):
         if not ret:
             continue
 
-        bboxs, scores = yolo_det(frame, human_model, reso=det_dim, confidence=args.thred_score)
+        bboxs, scores = yolo_det(
+            frame, human_model, reso=det_dim, confidence=args.thred_score
+        )
 
         if bboxs is None or not bboxs.any():
-            print('No person detected!')
+            print("No person detected!")
+            if bboxs_pre is None:
+                continue
             bboxs = bboxs_pre
             scores = scores_pre
         else:
-            bboxs_pre = copy.deepcopy(bboxs) 
-            scores_pre = copy.deepcopy(scores) 
+            bboxs_pre = copy.deepcopy(bboxs)
+            scores_pre = copy.deepcopy(scores)
 
         # Using Sort to track people
         people_track = people_sort.update(bboxs)
@@ -134,7 +204,20 @@ def gen_video_kpts(video, det_dim=416, num_peroson=1, gen_output=False):
 
         with torch.no_grad():
             # bbox is coordinate location
-            inputs, origin_img, center, scale = PreProcess(frame, track_bboxs, cfg, num_peroson)
+            padded_frame, pad_left, _ = pad_to_landscape(frame, pad_value=0)
+            track_bboxs_padded = []
+            for track_bbox in track_bboxs:
+                track_bboxs_padded.append(
+                    [
+                        track_bbox[0] + pad_left,
+                        track_bbox[1],
+                        track_bbox[2] + pad_left,
+                        track_bbox[3],
+                    ]
+                )
+            inputs, origin_img, center, scale = PreProcess(
+                padded_frame, track_bboxs_padded, cfg, num_peroson
+            )
 
             inputs = inputs[:, [2, 1, 0]]
 
@@ -143,11 +226,14 @@ def gen_video_kpts(video, det_dim=416, num_peroson=1, gen_output=False):
             output = pose_model(inputs)
 
             # compute coordinate
-            preds, maxvals = get_final_preds(cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale))
+            preds, maxvals = get_final_preds(
+                cfg, output.clone().cpu().numpy(), np.asarray(center), np.asarray(scale)
+            )
 
         kpts = np.zeros((num_peroson, 17, 2), dtype=np.float32)
         scores = np.zeros((num_peroson, 17), dtype=np.float32)
         for i, kpt in enumerate(preds):
+            kpt[:, 0] -= pad_left  # Undo the padding
             kpts[i] = kpt
 
         for i, score in enumerate(maxvals):
